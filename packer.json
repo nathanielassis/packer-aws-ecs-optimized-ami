@@ -1,0 +1,88 @@
+{
+  "variables": {
+    "aws_region": "",
+    "aws_vpc_id": "",
+    "aws_profile": "{{ env `AWS_PROFILE` }}",
+    "instance_type": "t2.micro",
+    "public_subnet_id": "",
+    "ami_name": "allcloud-amzn-ecs-{{isotime}}",
+    "xvda_volume_size": "8",
+    "xvdcz_volume_size": "22",
+    "encrypted": "false"
+  },
+  "builders": [
+    {
+      "type": "amazon-ebs",
+      "profile": "{{ user `aws_profile` }}",
+      "region": "{{ user `aws_region` }}",
+      "vpc_id": "{{ user `aws_vpc_id` }}",
+      "subnet_id": "{{ user `public_subnet_id` }}",
+      "associate_public_ip_address": "true",
+      "source_ami_filter": {
+        "filters": {
+          "virtualization-type": "hvm",
+          "name": "amzn-ami-*-amazon-ecs-optimized",
+          "root-device-type": "ebs"
+        },
+        "owners": [
+          "amazon"
+        ],
+        "most_recent": true
+      },
+      "instance_type": "{{ user `instance_type` }}",
+      "ssh_username": "ec2-user",
+      "ami_name": "{{ user `ami_name` | clean_ami_name }}",
+      "ami_description": "AllCloud ECS optimized with SSM agent and AWS inspector and an encrypted volume",
+      "tags": {
+        "Name": "{{user `ami_name` | clean_ami_name }}"
+      },
+      "run_tags": {
+        "Name": "{{user `ami_name`}}"
+      },
+      "run_volume_tags": {
+        "Name": "{{user `ami_name`}}"
+      },
+      "snapshot_tags": {
+        "Name": "{{user `ami_name`}}"
+      },
+      "launch_block_device_mappings": [
+        {
+          "device_name": "/dev/xvda",
+          "volume_size": "{{ user `xvda_volume_size` }}",
+          "volume_type": "gp2",
+          "delete_on_termination": true
+        },
+        {
+          "device_name": "/dev/xvdcz",
+          "volume_size": "{{ user `xvdcz_volume_size` }}",
+          "volume_type": "gp2",
+          "encrypted": "{{user `encrypted`}}"
+        }
+      ]
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "inline": [
+        "sudo yum update -y --security"
+      ],
+      "expect_disconnect": true
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm",
+        "curl -s -L https://inspector-agent.amazonaws.com/linux/latest/install | sudo bash"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "rm .ssh/authorized_keys",
+        "sudo rm /root/.ssh/authorized_keys",
+        "sudo shred -u /etc/ssh/*_key /etc/ssh/*_key.pub"
+      ]
+    }
+  ]
+}
